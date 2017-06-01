@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -e
 
+INIT="
+systemctl enable systemd-networkd systemd-resolved;
+ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf;
+mkdir -p /etc/portage/repos.conf;
+cp /usr/share/portage/config/repos.conf /etc/portage/repos.conf/gentoo.conf;
+emerge-webrsync;
+emerge --sync --quiet;
+eselect news read --quiet all;
+eselect locale set ${LANG};
+emerge app-shells/bash-completion;
+"
+
 AUTOBUILDS_URL="http://distfiles.gentoo.org/releases/amd64/autobuilds"
 STAGE3_LATEST_FILE="${AUTOBUILDS_URL}/latest-stage3-amd64-systemd.txt"
 
@@ -41,9 +53,14 @@ then
   error "Gentoo in a Container only supports systems based on systemd."
 fi
 
+if [ -z ${LANG} ]
+then
+  error "LANG not set, we are unable to continue."
+fi
+
 if [ "${EUID}" -ne 0 ]
 then
-  info "Root privilages are needed. Running as root."
+  info "Root privileges are needed. Running as root."
   if command_exists sudo
   then
     exec sudo ${BASH} "${0}" "${*}"
@@ -59,3 +76,7 @@ fi
 
 URL="$(get_latest_tar_url)"
 machinectl pull-tar --verify=no "${URL}" gentoo
+machinectl start gentoo
+sleep 3
+machinectl shell gentoo /bin/bash -c "${INIT}"
+info "Setup complete."
